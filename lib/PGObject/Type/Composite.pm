@@ -1,12 +1,12 @@
 package PGObject::Type::Composite;
 
-use 5.006;
-use strict;
-use warnings FATAL => 'all';
+use 5.008;
+use Scalar::Util;
+use PGObject::Util::Catalog::Types qw(get_attributes);
 
 =head1 NAME
 
-PGObject::Type::Composite - The great new PGObject::Type::Composite!
+PGObject::Type::Composite - Composite Type handler for PGObject
 
 =head1 VERSION
 
@@ -19,34 +19,138 @@ our $VERSION = '0.01';
 
 =head1 SYNOPSIS
 
-Quick summary of what the module does.
+  package MyObject;
+  use Moo;
+  with 'PGObject::Type::Composite';
 
-Perhaps a little code snippet.
+Then
 
-    use PGObject::Type::Composite;
+   use MyObject;
+   my $dbh = DBI->connect;
+   MyObject->initialize(dbh => $dbh);
+   MyObject->register(registry => 'default', type => 'foo');
 
-    my $foo = PGObject::Type::Composite->new();
-    ...
+And now every column of type foo (which must be a composite type) will get
+deserialized into MyObject.
 
-=head1 EXPORT
+=head1 EXPORTS
 
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
+=over
+
+=item initialize
+
+=item from_db
+
+=item to_db
+
+=cut
 
 =head1 SUBROUTINES/METHODS
 
-=head2 function1
+=head2 initialize
+
+=head2 register
+
+=head2 from_db
+
+=head2 to_db
 
 =cut
 
-sub function1 {
+sub _process {
+    my ($att) = @_;
+    my $is_array;
+    if (ref $att){ # try to serialize
+        if (eval {$att->can('to_db')}){  # has serialization method
+           $att = $att->to_db;
+        } elsif (ref $att =~ /ARRAY/){
+           $att = '{' . join(',', map {_process($_)} @$att) . '}';
+        } else { # last resort, stringify and hope for the best
+           $att = "$att";
+        }
+    }
+    # escaping
+    $att =~ s/([\\"]/$1/g;
+    $att = qq("$att") if $att =~ /[\\"{}]/;
+    return $att;
 }
 
-=head2 function2
+sub import {
+    my ($importer) = caller;
+    my @cols;
+    my $can_has if *{ "${importer}::has" }; # moo/moose lolmoose?
 
-=cut
+    my $initialize = sub {
+       my ($pkg, %args) = @_;
+       croak 'first argument must be a package name' if ref $pkg;
+       croak 'Must supply a dbh or columns argument' 
+            unless $args{dbh} or scalar @{$args{columns}};
 
-sub function2 {
+       @cols = @{$args{cols}} if @{$args{cols}};
+       if ($args{dbh} and !@cols){
+            @cols = get_attributes(
+                        typeschema => "$pkg"->_get_schema;
+                        typename   => "$pkg"->_get_typename;
+                        dbh        => $args{dbh}
+            );
+       }
+       return unless $can_has;
+       "$pkg"::has($_ => (is => 'ro')) for map {$_->{attname} } @cols;
+    };
+
+    my $from_db = sub {
+        my ($string) = @_;
+        my $hashref = pseudocsv_to_hash(
+                         pseudocsv_parse($string, map { $_{atttype}} @cols),
+                         map {$_{attname}} @cols
+        );
+        if ($can_has){
+           return "$pkg"->new(%$hashref);
+        } else {
+           return bless($hashref, $pkg);
+        }
+    };
+
+    my $to_db = sub {
+        my ($self) = @_;
+        my $hashref = { map { 
+                            my $att = $_->{attname};
+                            my $val = eval { $self->$att } || $_->{$att};
+                            $att => $val;
+                      } @cols };
+        return { 
+            type  => $typename,
+            value => '(' . 
+                    join(',' map {_process($hashref->{"$_->{attname}"})} @cols)
+                    . ')' 
+         };
+    };
+
+    my $register = sub { # easier here than also doing export
+        my $self = shift @_;
+        croak "Can't pass reference to register \n".
+              "Hint: use the class instead of the object" if ref $self;
+        my %args = @_;
+        my $registry = $args{registry};
+        $registry ||= 'default';
+        my $types = $args{types};
+        croak 'Must supply types as a hashref'
+           unless defined $types and @$types;
+        for my $type (@$types){
+            my $ret =
+                PGObject->register_type(registry => $registry, 
+                                         pg_type => $type,
+                                      perl_class => $self);
+            return $ret unless $ret;
+        }
+        return 1;
+    };
+
+    no strict 'refs';
+    *{ "${caller}::initialize" } = $initialize;
+    *{ "${caller}::register" }   = $register;
+    *{ "${caller}::from_db" }    = $from_db;
+    *{ "${caller}::to_db" }      = $to_db;
 }
 
 =head1 AUTHOR
