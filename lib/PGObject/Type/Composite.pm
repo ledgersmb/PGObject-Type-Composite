@@ -87,7 +87,7 @@ sub import {
        croak 'Must supply a dbh or columns argument' 
             unless $args{dbh} or scalar @{$args{columns}};
 
-       @cols = @{$args{cols}} if @{$args{cols}};
+       @cols = @{$args{columns}} if @{$args{columns}};
        if ($args{dbh} and !@cols){
             @cols = get_attributes(
                         typeschema => "$pkg"->_get_schema,
