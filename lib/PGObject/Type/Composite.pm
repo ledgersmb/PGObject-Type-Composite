@@ -3,6 +3,7 @@ package PGObject::Type::Composite;
 use 5.008;
 use Scalar::Util;
 use PGObject::Util::Catalog::Types qw(get_attributes);
+use PGObject::Util::PseudoCSV;
 use Carp;
 
 =head1 NAME
@@ -44,6 +45,8 @@ deserialized into MyObject.
 
 =item to_db
 
+=back
+
 =cut
 
 =head1 SUBROUTINES/METHODS
@@ -72,7 +75,7 @@ sub _process {
     }
     # escaping
     $att =~ s/([\\"])/$1/g;
-    $att = qq("$att") if $att =~ /[\\"{}]/;
+    $att = qq("$att") if $att =~ /[,\\"{}]/;
     return $att;
 }
 
@@ -99,15 +102,17 @@ sub import {
     };
 
     my $from_db = sub {
-        my ($string) = @_;
-        my $hashref = pseudocsv_to_hash(
-                         pseudocsv_parse($string, map { $_{atttype}} @cols),
-                         map {$_{attname}} @cols
+        my ($to_pkg, $string) = @_;
+        my $hashref = PGObject::Util::PseudoCSV::pseudocsv_tohash(
+                         [pseudocsv_parse(
+                            $string, [map { $_->{atttype}} @cols]
+                         )],
+                         [map {$_->{attname}} @cols]
         );
         if ($can_has){ # moo/moose
            return "$pkg"->new(%$hashref);
         } else {
-           return bless($hashref, $pkg);
+           return bless($hashref, $to_pkg);
         }
     };
 
@@ -115,7 +120,7 @@ sub import {
         my ($self) = @_;
         my $hashref = { map { 
                             my $att = $_->{attname};
-                            my $val = eval { $self->$att } || $_->{$att};
+                            my $val = eval { $self->$att } || $self->{$att};
                             $att => $val;
                       } @cols };
         return { 
@@ -140,7 +145,7 @@ sub import {
             my $ret =
                 PGObject->register_type(registry => $registry, 
                                          pg_type => $type,
-                                      perl_class => $self);
+                                      perl_class => "$self");
             return $ret unless $ret;
         }
         return 1;
