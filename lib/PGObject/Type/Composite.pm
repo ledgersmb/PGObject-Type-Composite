@@ -3,6 +3,7 @@ package PGObject::Type::Composite;
 use 5.008;
 use Scalar::Util;
 use PGObject::Util::Catalog::Types qw(get_attributes);
+use Carp;
 
 =head1 NAME
 
@@ -70,7 +71,7 @@ sub _process {
         }
     }
     # escaping
-    $att =~ s/([\\"]/$1/g;
+    $att =~ s/([\\"])/$1/g;
     $att = qq("$att") if $att =~ /[\\"{}]/;
     return $att;
 }
@@ -89,13 +90,12 @@ sub import {
        @cols = @{$args{cols}} if @{$args{cols}};
        if ($args{dbh} and !@cols){
             @cols = get_attributes(
-                        typeschema => "$pkg"->_get_schema;
-                        typename   => "$pkg"->_get_typename;
+                        typeschema => "$pkg"->_get_schema,
+                        typename   => "$pkg"->_get_typename,
                         dbh        => $args{dbh}
             );
        }
-       return unless $can_has;
-       "$pkg"::has($_ => (is => 'ro')) for map {$_->{attname} } @cols;
+       return @cols;
     };
 
     my $from_db = sub {
@@ -104,7 +104,7 @@ sub import {
                          pseudocsv_parse($string, map { $_{atttype}} @cols),
                          map {$_{attname}} @cols
         );
-        if ($can_has){
+        if ($can_has){ # moo/moose
            return "$pkg"->new(%$hashref);
         } else {
            return bless($hashref, $pkg);
@@ -121,7 +121,7 @@ sub import {
         return { 
             type  => $typename,
             value => '(' . 
-                    join(',' map {_process($hashref->{"$_->{attname}"})} @cols)
+                    join(',', map {_process($hashref->{"$_->{attname}"})} @cols)
                     . ')' 
          };
     };
