@@ -87,7 +87,7 @@ sub import {
        croak 'Must supply a dbh or columns argument' 
             unless $args{dbh} or scalar @{$args{columns}};
 
-       @cols = @{$args{cols}} if @{$args{cols}};
+       @cols = @{$args{columns}} if @{$args{columns}};
        if ($args{dbh} and !@cols){
             @cols = get_attributes(
                         typeschema => "$pkg"->_get_schema,
@@ -150,11 +150,11 @@ sub import {
     };
 
     no strict 'refs';
-    *{ "${caller}::initialize" } = $initialize;
-    *{ "${caller}::register" }   = $register;
-    *{ "${caller}::from_db" }    = $from_db;
-    *{ "${caller}::to_db" }      = $to_db;
-    *{ "${caller}::_get_cols" }  = $_get_cols;
+    *{ "${importer}::initialize" } = $initialize;
+    *{ "${importer}::register" }   = $register;
+    *{ "${importer}::from_db" }    = $from_db;
+    *{ "${importer}::to_db" }      = $to_db;
+    *{ "${importer}::_get_cols" }  = $_get_cols;
 }
 
 =head1 AUTHOR
