@@ -75,7 +75,7 @@ sub _process {
     }
     # escaping
     $att =~ s/([\\"])/$1/g;
-    $att = qq("$att") if $att =~ /[\\"{}]/;
+    $att = qq("$att") if $att =~ /[,\\"{}]/;
     return $att;
 }
 
@@ -105,7 +105,7 @@ sub import {
         my ($to_pkg, $string) = @_;
         my $hashref = PGObject::Util::PseudoCSV::pseudocsv_tohash(
                          [pseudocsv_parse(
-                            $string, {map { $_->{atttype}} @cols}
+                            $string, [map { $_->{atttype}} @cols]
                          )],
                          [map {$_->{attname}} @cols]
         );
@@ -120,7 +120,7 @@ sub import {
         my ($self) = @_;
         my $hashref = { map { 
                             my $att = $_->{attname};
-                            my $val = eval { $self->$att } || $_->{$att};
+                            my $val = eval { $self->$att } || $self->{$att};
                             $att => $val;
                       } @cols };
         return { 
