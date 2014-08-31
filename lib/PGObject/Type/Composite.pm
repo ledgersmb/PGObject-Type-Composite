@@ -145,12 +145,16 @@ sub import {
         }
         return 1;
     };
+    my $_get_cols = sub {
+        return @cols;
+    };
 
     no strict 'refs';
     *{ "${caller}::initialize" } = $initialize;
     *{ "${caller}::register" }   = $register;
     *{ "${caller}::from_db" }    = $from_db;
     *{ "${caller}::to_db" }      = $to_db;
+    *{ "${caller}::_get_cols" }  = $_get_cols;
 }
 
 =head1 AUTHOR
