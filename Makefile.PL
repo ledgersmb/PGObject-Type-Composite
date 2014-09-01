@@ -10,7 +10,7 @@ WriteMakefile(
     ABSTRACT_FROM    => 'lib/PGObject/Type/Composite.pm',
     LICENSE          => 'BSD',
     PL_FILES         => {},
-    MIN_PERL_VERSION => 5.006,
+    MIN_PERL_VERSION => 5.008,
     CONFIGURE_REQUIRES => {
         'ExtUtils::MakeMaker' => 0,
     },
@@ -18,6 +18,11 @@ WriteMakefile(
         'Test::More' => 0,
     },
     PREREQ_PM => {
+        DBI                              => 0,
+        'PGObject::Util::PseudoCSV'      => 0,
+        'PGObject::Util::Catalog::Types' => 0,
+        'Carp'                           => 0,
+        'Scalar::Util'                   => 0,
         #'ABC'              => 1.6,
         #'Foo::Bar::Module' => 5.0401,
     },
